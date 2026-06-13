@@ -1,0 +1,134 @@
+#include <IRremote.h>
+
+// Пины
+const int IR_LED_PIN = 13;    // ПИН для IR передатчика
+const int BUTTON_PIN = 4;     // ПИН для кнопки
+const int LED_PIN = LED_BUILTIN; // Встроенный светодиод
+
+// Структура для хранения IR кодов
+struct IRCommand {
+  const char* name;
+  decode_type_t protocol;
+  uint32_t address;
+  uint32_t command;
+  bool isRaw;
+  uint16_t* rawData;
+  uint16_t rawLen;
+};
+
+// Данные для PANASONIC (RAW)
+uint16_t panasonicRawData[] = {3481, 1715, 457, 442, 428, 1284, 457, 442, 428, 443, 427, 443, 427, 443, 427, 442, 428, 442, 428, 442, 453, 417, 453, 417, 453, 417, 452, 418, 451, 1289, 451, 422, 448, 447, 422, 424, 447, 447, 423, 448, 422, 424, 446, 448, 422, 448, 422, 448, 422, 1319, 422, 448, 422, 448, 422, 448, 422, 448, 422, 448, 423, 448, 422, 448, 422, 448, 422, 1319, 422, 448, 422, 1319, 422, 1319, 422, 1319, 422, 1319, 422, 448, 422, 449, 421, 1319, 422, 448, 422, 1320, 421, 1319, 422, 1320, 421, 1319, 422, 449, 422, 1319, 422, 74732, 3475, 1750, 422, 448, 422, 1319, 422, 448, 422, 448, 422, 448, 422, 448, 422, 448, 422, 448, 422, 448, 422, 448, 422, 448, 422, 448, 422, 449, 422, 1319, 422, 449, 421, 449, 421, 448, 422, 449, 421, 449, 421, 449, 421, 449, 421, 449, 421, 449, 421, 1320, 421, 449, 421, 449, 421, 449, 421, 449, 421, 449, 422, 449, 421, 449, 422, 449, 421, 1320, 421, 449, 421, 1320, 421, 1320, 421, 1320, 421, 1320, 421, 449, 421, 449, 421, 1320, 421, 449, 421, 1320, 421, 1320, 421, 1320, 421, 1320, 421, 450, 420, 1321, 420, 74732, 3475, 1750, 422, 448, 422, 1319, 422, 448, 422, 448, 423, 448, 422, 448, 422, 448, 422, 448, 422, 448, 422, 448, 422, 448, 422, 448, 422, 448, 422, 1319, 422, 448, 422, 448, 422, 448, 422, 448, 422, 448, 422, 449, 421, 449, 421, 449, 421, 448, 422, 1320, 421, 449, 421, 449, 421, 449, 422, 449, 421, 449, 421, 449, 422, 449, 421, 449, 421, 1320, 421, 449, 421, 1320, 421, 1320, 421, 1320, 421, 1320, 421, 449, 421, 449, 421, 1320, 421, 449, 421, 1320, 421, 1320, 421, 1320, 421, 1320, 421, 449, 421, 1320, 421};
+
+// Данные для DENVER (RAW)
+uint16_t denverRawData[] = {528, 1870, 433, 380, 432, 386, 426, 392, 431, 780, 428, 390, 433, 386, 426, 392, 431, 387, 425, 392, 431, 95569, 536, 1862, 430, 382, 431, 389, 423, 421, 402, 783, 425, 394, 429, 389, 434, 386, 426, 418, 405, 387, 425, 95574, 531, 1868, 424, 389, 434, 386, 426, 392, 431, 781, 427, 392, 431, 388, 424, 395, 428, 416, 407, 411, 402, 95573, 532, 1867, 425, 388, 424, 395, 428, 391, 432, 779, 430, 390, 433, 412, 400, 418, 405, 389, 423, 419, 404, 95571, 533, 1866, 426, 387, 425, 394, 429, 415, 408, 804, 404, 390, 423, 421, 402, 392, 431, 388, 424, 419, 404, 95571, 534, 1864, 428, 385, 427, 392, 431, 388, 424, 787, 432, 388, 424, 395, 428, 392, 431, 388, 424, 394, 429};
+
+// Массив всех команд
+IRCommand commands[] = {
+  {"SAMSUNG", SAMSUNG, 0x07, 0x02, false, nullptr, 0},
+  {"GRUNDIG", RC5, 0x00, 0x0C, false, nullptr, 0},
+  {"LG", RC5, 0x00, 0x0C, false, nullptr, 0},
+  {"SONY", SIRC, 0x01, 0x15, false, nullptr, 0},
+  {"TELEFUNKEN", RC5, 0x01, 0x0C, false, nullptr, 0},
+  {"VIZIO", NEC, 0x04, 0x08, false, nullptr, 0},
+  {"PHILLIPS", RC6, 0x00, 0x0C, false, nullptr, 0},
+  {"MEDION", NEC, 0x19, 0x18, false, nullptr, 0},
+  {"PANASONIC", UNKNOWN, 0, 0, true, panasonicRawData, sizeof(panasonicRawData) / sizeof(uint16_t)},
+  {"OPPO", NEC, 0x49, 0x1A, false, nullptr, 0},
+  {"FETCH", NEC, 0x6446, 0x5DA2, false, nullptr, 0},
+  {"DENVER", UNKNOWN, 0, 0, true, denverRawData, sizeof(denverRawData) / sizeof(uint16_t)},
+  {"XBOX", NEC, 0x80D8, 0x2FD0, false, nullptr, 0},
+  {"PLATINUM", NEC, 0x007F, 0x15EA, false, nullptr, 0},
+  {"HISENSE", NEC, 0x00BF, 0x0DF2, false, nullptr, 0},
+  {"ELITELUX", NEC, 0x007F, 0x15EA, false, nullptr, 0}
+};
+
+const int numCommands = sizeof(commands) / sizeof(commands[0]);
+int currentCommand = 0;
+bool spamming = false;          // Флаг спама
+unsigned long lastSendTime = 0;
+const unsigned long sendInterval = 500; // Интервал между отправками (мс)
+
+IRsend irsend(IR_LED_PIN);
+
+void setup() {
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(LED_PIN, OUTPUT);
+  Serial.begin(9600);
+  Serial.println("Universal TV Power Off Remote - SPAM MODE");
+  Serial.println("Press button to START/STOP spamming");
+  Serial.print("Current TV: ");
+  Serial.println(commands[currentCommand].name);
+}
+
+void loop() {
+  // Проверка нажатия кнопки (переключение режима спама)
+  static bool lastButtonState = HIGH;
+  bool currentButtonState = digitalRead(BUTTON_PIN);
+  
+  // Обработка нажатия (фронт сигнала)
+  if (lastButtonState == HIGH && currentButtonState == LOW) {
+    delay(50); // Антидребезг
+    if (digitalRead(BUTTON_PIN) == LOW) {
+      spamming = !spamming; // Переключение спама
+      
+      if (spamming) {
+        Serial.println(">>> SPAM STARTED <<<");
+        digitalWrite(LED_PIN, HIGH); // Светодиод горит во время спама
+      } else {
+        Serial.println(">>> SPAM STOPPED <<<");
+        digitalWrite(LED_PIN, LOW);
+      }
+      
+      // Ждем отпускания кнопки
+      while(digitalRead(BUTTON_PIN) == LOW) {
+        delay(10);
+      }
+    }
+  }
+  lastButtonState = currentButtonState;
+  
+  // Спам-режим
+  if (spamming) {
+    unsigned long now = millis();
+    if (now - lastSendTime >= sendInterval) {
+      sendCurrentSignal();
+      lastSendTime = now;
+    }
+  }
+}
+
+void sendCurrentSignal() {
+  Serial.print(".");
+  
+  if (commands[currentCommand].isRaw) {
+    if (commands[currentCommand].rawData != nullptr) {
+      irsend.sendRaw(commands[currentCommand].rawData, 
+                     commands[currentCommand].rawLen, 
+                     38);
+    }
+  } else {
+    switch(commands[currentCommand].protocol) {
+      case SAMSUNG:
+        irsend.sendSAMSUNG(commands[currentCommand].command, 32);
+        break;
+      case RC5:
+        irsend.sendRC5(commands[currentCommand].command, 12);
+        break;
+      case SIRC:
+        irsend.sendSony(commands[currentCommand].command, 12);
+        break;
+      case NEC:
+        irsend.sendNEC(commands[currentCommand].command, 32);
+        break;
+      case RC6:
+        irsend.sendRC6(commands[currentCommand].command, 20);
+        break;
+      default:
+        return;
+    }
+  }
+}
+
+void printCurrentTV() {
+  Serial.println(commands[currentCommand].name);
+}
